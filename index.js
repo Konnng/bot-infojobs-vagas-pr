@@ -127,7 +127,7 @@ try {
     _log('-'.repeat(100))
 
     try {
-      jobs.slice(0, 2).forEach((item, index) => {
+      jobs.forEach((item, index) => {
         _log('Processing item ' + (index + 1))
 
         let date = moment.unix(item.date).format('DD/MM/YYYY')
