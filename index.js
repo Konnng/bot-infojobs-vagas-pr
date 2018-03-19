@@ -11,7 +11,7 @@ const trim = require('trim')
 const sleep = require('sleep-time')
 const Slack = require('slack-node')
 
-const slackWebHook = process.env.LABS_SLACK_WEBHOOK_URL_DEVPARANA_BOT_PR || false
+const slackWebHook = process.env.LABS_SLACK_WEBHOOK_URL_DEVPARANA_BOT_PR || ''
 const dbFile = path.join(__dirname, 'data/db.json')
 
 if (!fs.existsSync(path.dirname(dbFile)) && !fs.mkdirsSync(path.dirname(dbFile))) {
@@ -31,7 +31,7 @@ let deferred = Q.defer()
 let deferredProcessing = Q.defer()
 let deferredFinal = Q.defer()
 let htmlFileTests = path.join(__dirname, 'jobs.html')
-let sandBox = false
+let sandBox = true
 
 slack.setWebhook(slackWebHook)
 
@@ -41,7 +41,7 @@ try {
   if (sandBox && fs.existsSync(htmlFileTests)) {
     deferred.resolve(fs.readFileSync(htmlFileTests))
   } else {
-    request('http://www.infojobs.com.br/vagas-de-emprego-programador-em-parana.aspx?Categoria=74&gridtype=2', (err, response, body) => {
+    request('https://www.infojobs.com.br/vagas-de-emprego-programador-em-parana.aspx?Categoria=74&gridtype=2', (err, response, body) => {
       if (err) {
         return deferred.reject(err)
       } else if (response.statusCode !== 200) {
@@ -57,7 +57,7 @@ try {
     }
 
     let $ = cheerio.load(html)
-    let jobsOffers = $('ol[itemtype="http://schema.org/JobPosting"]').filter((index, element) => $(element).find('.limited').length === 0)
+    let jobsOffers = $('div.element-vaga').filter((index, element) => !$(element).is('.js_VacancyLimited'))
 
     if (!jobsOffers.length) {
       throw new Error('No Job vaccancies was found.')
@@ -98,6 +98,7 @@ try {
 
     deferredProcessing.resolve(jobsOffers)
   }, err => {
+    _log('ERROR: ', err)
     throw err
   })
 
@@ -127,22 +128,19 @@ try {
     _log('-'.repeat(100))
 
     try {
+      const mainTitle = (jobs.length > 1 ? 'Vagas de trabalho encontradas. ' : 'Vaga de trabalho encontrada.') + ' Confira!'
       jobs.forEach((item, index) => {
         _log('Processing item ' + (index + 1))
 
-        let date = moment.unix(item.date).format('DD/MM/YYYY')
+        const date = moment.unix(item.date).format('DD/MM/YYYY')
+        const jobTitle = item.title.replace(new RegExp(item.city, 'ig'), '') + ` - ${item.city}`
 
         _log(item.title, date)
         _log('-'.repeat(100))
 
         let params = {
-          attachments: [{
-            title: `${item.title} - ${item.city}`,
-            title_link: item.url,
-            text: `Vaga: ${item.title}\nData: ${date}\nDetalhes: ${item.labels.join(', ')}`,
-            color: '#7CD197'
-          }],
-          text: 'Vaga de trabalho encontrada. Confira! \n\n' + item.url
+          text: (index === 0 ? mainTitle + '\n\n\n' : '') +
+            `*${jobTitle}* - ` + item.url
         }
 
         slack.webhook(params, (err, response) => {
