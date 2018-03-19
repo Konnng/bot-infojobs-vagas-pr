@@ -1,3 +1,5 @@
 node_modules
 coverage
 data/*
+/jobs.html
+/cron.log
